@@ -91,35 +91,6 @@ app.get('/health', (req, res) => {
 app.use('/api/chat', chatRoutes);
 app.use('/api/payment', paymentRoutes);
 
-// API Welcome
-app.get('/api', (req, res) => {
-  res.json({
-    message: 'Welcome to Restaurant ChatBot API',
-    version: '1.0.0',
-    endpoints: {
-      chat: '/api/chat',
-      payment: '/api/payment'
-    }
-  });
-});
-// ====================
-// API ROUTES
-// ====================
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    message: 'Restaurant ChatBot is running',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
-  });
-});
-
-// API Routes
-app.use('/api/chat', chatRoutes);
-app.use('/api/payment', paymentRoutes);
-
 // Payment page route
 app.get('/payment.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'payment.html'));
@@ -136,6 +107,7 @@ app.get('/api', (req, res) => {
     }
   });
 });
+
 // ====================
 // CATCH-ALL FOR FRONTEND
 // ====================

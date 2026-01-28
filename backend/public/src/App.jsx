@@ -197,12 +197,11 @@ function App() {
     try {
       const response = await axios.post(`${API_BASE_URL}/chat/checkout/${sessionId}`);
       
+      console.log('Checkout response:', response.data); // Debug
+      
       if (response.data.paymentRequired && response.data.paymentUrl) {
-        // Show payment message with redirect button
-        addMessage('bot', response.data.message, [
-          { value: 'pay_now', label: `💳 Pay ₦${response.data.order.totalAmount} Now` },
-          { value: '1', label: '➕ Add More Items' }
-        ], response.data.order);
+        // IMMEDIATELY redirect to payment page
+        window.location.href = response.data.paymentUrl;
       } else {
         addMessage('bot', response.data.message, response.data.options);
       }
@@ -213,11 +212,26 @@ function App() {
   };
 
   const handlePaymentRedirect = () => {
-    // Redirect to payment page
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.data?._id) {
-      window.location.href = `/payment.html?orderId=${lastMessage.data._id}&sessionId=${sessionId}`;
+    // Find the last order data in messages
+    const lastMessageWithOrder = [...messages].reverse().find(msg => msg.data?._id);
+    
+    if (lastMessageWithOrder?.data?._id) {
+      window.location.href = `/payment.html?orderId=${lastMessageWithOrder.data._id}&sessionId=${sessionId}`;
     } else {
+      // Try to get current order
+      handleCurrentOrderForPayment();
+    }
+  };
+
+  const handleCurrentOrderForPayment = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/chat/current-order/${sessionId}`);
+      if (response.data.order) {
+        window.location.href = `/payment.html?orderId=${response.data.order._id}&sessionId=${sessionId}`;
+      } else {
+        addMessage('bot', 'No order found to process payment.');
+      }
+    } catch (error) {
       addMessage('bot', 'Unable to process payment. Please try checkout again.');
     }
   };
