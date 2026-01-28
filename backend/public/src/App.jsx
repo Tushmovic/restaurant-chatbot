@@ -10,7 +10,6 @@ function App() {
   const [inputValue, setInputValue] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Initialize session
@@ -37,6 +36,28 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Check for payment success on load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment');
+    const reference = urlParams.get('reference');
+
+    if (paymentStatus === 'success') {
+      addMessage('bot', `🎉 Payment Successful!\n\nYour order has been confirmed and is being prepared.\nReference: ${reference || 'N/A'}\n\nThank you for your order!`);
+      
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Show menu options
+      setTimeout(() => {
+        addMessage('bot', 'What would you like to do next?', [
+          { value: '1', label: '🍽️ Place New Order' },
+          { value: '98', label: '📜 View Order History' }
+        ]);
+      }, 1000);
+    }
+  }, []);
+
   const loadWelcomeMessage = async () => {
     setIsLoading(true);
     try {
@@ -49,7 +70,13 @@ function App() {
       }]);
     } catch (error) {
       console.error('Error loading welcome message:', error);
-      addMessage('bot', 'Welcome to FoodieBot! How can I help you today?');
+      addMessage('bot', 'Welcome to FoodieBot! How can I help you today?', [
+        { value: '1', label: 'Place an order' },
+        { value: '99', label: 'Checkout order' },
+        { value: '98', label: 'Order history' },
+        { value: '97', label: 'Current order' },
+        { value: '0', label: 'Cancel order' }
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -70,8 +97,23 @@ function App() {
 
     setIsLoading(true);
     
-    // Add user's selection to chat
-    const optionLabel = getOptionLabel(value, messages[messages.length - 1].options);
+    // Handle special payment option
+    if (value === 'pay_now' || value === 'pay') {
+      handlePaymentRedirect();
+      setIsLoading(false);
+      return;
+    }
+    
+    // Find the label for user's selection
+    const lastMessage = messages[messages.length - 1];
+    let optionLabel = value;
+    if (lastMessage?.options) {
+      const selectedOption = lastMessage.options.find(opt => opt.value === value);
+      if (selectedOption) {
+        optionLabel = selectedOption.label;
+      }
+    }
+    
     addMessage('user', `Selected: ${optionLabel}`);
 
     try {
@@ -154,14 +196,29 @@ function App() {
   const handleCheckout = async () => {
     try {
       const response = await axios.post(`${API_BASE_URL}/chat/checkout/${sessionId}`);
-      addMessage('bot', response.data.message, response.data.options, response.data.order);
       
-      if (response.data.paymentRequired) {
-        setCurrentOrder(response.data.order);
+      if (response.data.paymentRequired && response.data.paymentUrl) {
+        // Show payment message with redirect button
+        addMessage('bot', response.data.message, [
+          { value: 'pay_now', label: `💳 Pay ₦${response.data.order.totalAmount} Now` },
+          { value: '1', label: '➕ Add More Items' }
+        ], response.data.order);
+      } else {
+        addMessage('bot', response.data.message, response.data.options);
       }
     } catch (error) {
       console.error('Error during checkout:', error);
       addMessage('bot', 'Sorry, could not process checkout. Please try again.');
+    }
+  };
+
+  const handlePaymentRedirect = () => {
+    // Redirect to payment page
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.data?._id) {
+      window.location.href = `/payment.html?orderId=${lastMessage.data._id}&sessionId=${sessionId}`;
+    } else {
+      addMessage('bot', 'Unable to process payment. Please try checkout again.');
     }
   };
 
@@ -185,47 +242,12 @@ function App() {
     }
   };
 
-  const getOptionLabel = (value, options) => {
-    if (!options) return value;
-    const option = options.find(opt => opt.value === value);
-    return option ? option.label : value;
-  };
-
   const handleInputSubmit = (e) => {
     e.preventDefault();
     if (inputValue.trim() && !isLoading) {
       // For this implementation, we're using option selection only
       // But you could extend this for free-text input
       setInputValue('');
-    }
-  };
-
-  const handlePayment = async () => {
-    if (!currentOrder) return;
-    
-    // In a real implementation, you would:
-    // 1. Initialize payment with Paystack
-    // 2. Redirect to payment page
-    // 3. Handle payment verification callback
-    
-    const testEmail = 'customer@example.com';
-    
-    try {
-      const response = await axios.post(`${API_BASE_URL}/payment/initialize`, {
-        sessionId,
-        orderId: currentOrder._id,
-        email: testEmail,
-        amount: currentOrder.totalAmount
-      });
-      
-      // Redirect to Paystack payment page
-      window.open(response.data.authorization_url, '_blank');
-      
-      addMessage('bot', 'Payment initiated. Please complete payment in the new tab.');
-      
-    } catch (error) {
-      console.error('Payment error:', error);
-      addMessage('bot', 'Sorry, could not initiate payment. Please try again.');
     }
   };
 
@@ -262,7 +284,7 @@ function App() {
                   <span className="text-sm">{new Date(order.createdAt).toLocaleDateString()}</span>
                 </div>
                 <div className="text-sm text-gray-600">
-                  {order.items.length} items • ₦{order.totalAmount}
+                  {order.items.length} items • ₦{order.totalAmount} • {order.status}
                 </div>
               </div>
             ))}
@@ -342,19 +364,32 @@ function App() {
                           disabled={isLoading}
                           className={`block w-full text-left px-4 py-3 rounded-lg transition ${
                             message.sender === 'bot'
-                              ? 'bg-white border border-gray-300 hover:bg-gray-50'
+                              ? option.value === 'pay_now' 
+                                ? 'bg-green-100 border border-green-300 hover:bg-green-200 text-green-800'
+                                : 'bg-white border border-gray-300 hover:bg-gray-50'
                               : 'bg-blue-700 hover:bg-blue-800'
                           } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <div className="flex items-center">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                              message.sender === 'bot'
-                                ? 'bg-blue-100 text-blue-600'
-                                : 'bg-blue-800'
-                            }`}>
-                              {option.value}
-                            </div>
-                            <span>{option.label}</span>
+                            {option.value === 'pay_now' ? (
+                              <>
+                                <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center mr-3">
+                                  💳
+                                </div>
+                                <span className="font-bold">{option.label}</span>
+                              </>
+                            ) : (
+                              <>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                                  message.sender === 'bot'
+                                    ? 'bg-blue-100 text-blue-600'
+                                    : 'bg-blue-800'
+                                }`}>
+                                  {option.value}
+                                </div>
+                                <span>{option.label}</span>
+                              </>
+                            )}
                           </div>
                         </button>
                       ))}
@@ -382,22 +417,6 @@ function App() {
             
             <div ref={messagesEndRef} />
           </div>
-
-          {/* Payment Button (shown when needed) */}
-          {currentOrder && (
-            <div className="px-6 pb-4">
-              <button
-                onClick={handlePayment}
-                className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-700 transition flex items-center justify-center space-x-3"
-              >
-                <FiCheckCircle size={24} />
-                <span>Pay ₦{currentOrder.totalAmount} with Paystack</span>
-              </button>
-              <p className="text-center text-gray-600 text-sm mt-2">
-                Test card: 4242 4242 4242 4242
-              </p>
-            </div>
-          )}
 
           {/* Input Area */}
           <div className="border-t p-6">
