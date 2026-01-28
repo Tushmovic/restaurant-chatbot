@@ -3,11 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "scripts": {
+    "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "render-build": "npm install && npm run build"
+    "build": "npx vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
     "react": "^18.2.0",
