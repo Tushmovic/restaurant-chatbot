@@ -1,22 +1,21 @@
 /**
  * Restaurant ChatBot - Server Entry Point
- * This file is the main entry point for the application
+ * Main server file optimized for Render
  */
 
-// Load environment variables
 require('dotenv').config();
-
-// Import the app from app.js
 const app = require('./app');
 
 const PORT = process.env.PORT || 5000;
 
-// Start server if not in production (Vercel handles this differently)
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`🚀 Server started on port ${PORT}`);
-  });
-}
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 MongoDB: ${process.env.MONGODB_URI ? 'Connected' : 'Not configured'}`);
+  console.log(`📡 API URL: http://localhost:${PORT}`);
+  console.log(`✅ Health check: http://localhost:${PORT}/health`);
+});
 
-// Export for Vercel
+// Export app
 module.exports = app;

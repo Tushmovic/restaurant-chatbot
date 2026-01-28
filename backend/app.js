@@ -8,7 +8,6 @@ const cors = require('cors');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const mongoose = require('mongoose');
-const path = require('path');
 require('dotenv').config();
 
 // Import routes
@@ -24,7 +23,6 @@ const connectDB = require('./config/database');
 
 // Create Express app
 const app = express();
-const PORT = process.env.PORT || 5000;
 
 // ====================
 // DATABASE CONNECTION
@@ -35,9 +33,24 @@ connectDB();
 // MIDDLEWARE
 // ====================
 
-// CORS configuration - allows frontend to communicate with backend
+// CORS configuration for Render
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://restaurant-chatbot-frontend.onrender.com',
+  'https://restaurant-chatbot-frontend.vercel.app'
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -77,13 +90,30 @@ app.use((req, res, next) => {
 // ROUTES
 // ====================
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Restaurant ChatBot API',
+    version: '1.0.0',
+    endpoints: {
+      chat: '/api/chat',
+      payment: '/api/payment',
+      webhook: '/api/webhook',
+      health: '/health'
+    },
+    documentation: 'Use /api/chat/welcome to start chatbot',
+    frontend: 'https://restaurant-chatbot-frontend.onrender.com'
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     message: 'Restaurant ChatBot API is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
 });
 
@@ -116,7 +146,8 @@ app.use((req, res, next) => {
     type: 'error',
     message: 'Endpoint not found',
     requestedUrl: req.url,
-    method: req.method
+    method: req.method,
+    availableEndpoints: ['/', '/health', '/api', '/api/chat', '/api/payment']
   });
 });
 
@@ -134,21 +165,5 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ====================
-// SERVER START
-// ====================
-
-// Only start server if not in production (Vercel handles this differently)
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
-    console.log(`💾 Database: ${process.env.MONGODB_URI ? 'Connected to MongoDB' : 'No database configured'}`);
-    console.log(`🔄 API Endpoint: http://localhost:${PORT}/api`);
-    console.log(`✅ Health check: http://localhost:${PORT}/health`);
-  });
-}
-
-// Export app for Vercel serverless functions
+// Export app
 module.exports = app;

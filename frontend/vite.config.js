@@ -14,5 +14,8 @@ export default defineConfig({
         manualChunks: undefined
       }
     }
-  }
+  },
+  // Important for Render static deployment
+  base: './',
+  publicDir: 'public'
 })
