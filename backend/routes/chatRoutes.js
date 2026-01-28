@@ -126,7 +126,7 @@ router.get('/current-order/:sessionId', async (req, res) => {
       order: order,
       options: [
         { value: '1', label: 'Add more items' },
-        { value: '99', label: 'Proceed to Payment' },
+        { value: '99', label: 'Checkout' },
         { value: '0', label: 'Cancel order' }
       ]
     });
@@ -137,7 +137,7 @@ router.get('/current-order/:sessionId', async (req, res) => {
   }
 });
 
-// Checkout order (now redirects to payment)
+// Checkout order
 router.post('/checkout/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -151,8 +151,8 @@ router.post('/checkout/:sessionId', async (req, res) => {
       });
     }
     
-    // Update order status to ready for payment
-    order.status = 'ready_for_payment';
+    // Update order status
+    order.status = 'placed';
     await order.save();
     
     // Create order history record
@@ -161,19 +161,18 @@ router.post('/checkout/:sessionId', async (req, res) => {
       orderId: order._id,
       items: order.items,
       totalAmount: order.totalAmount,
-      status: 'ready_for_payment',
-      paymentStatus: 'pending'
+      status: order.status,
+      paymentStatus: order.paymentStatus
     });
     
     res.json({
       type: 'checkout',
-      message: 'Order ready for payment! Click "Pay Now" to complete your order.',
+      message: 'Order placed successfully!',
       order: order,
       paymentRequired: true,
-      paymentUrl: `/payment.html?orderId=${order._id}&sessionId=${sessionId}`,
       options: [
-        { value: 'pay_now', label: `Pay ₦${order.totalAmount} Now` },
-        { value: '1', label: 'Continue Shopping' }
+        { value: 'pay', label: 'Proceed to Payment' },
+        { value: '1', label: 'Start New Order' }
       ]
     });
     

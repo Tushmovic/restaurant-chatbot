@@ -91,11 +91,6 @@ app.get('/health', (req, res) => {
 app.use('/api/chat', chatRoutes);
 app.use('/api/payment', paymentRoutes);
 
-// Payment page route
-app.get('/payment.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'payment.html'));
-});
-
 // API Welcome
 app.get('/api', (req, res) => {
   res.json({
